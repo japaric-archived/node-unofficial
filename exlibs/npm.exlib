@@ -183,7 +183,7 @@ pnv_from_dep() {
 
 npm_src_prepare() {
     # multi-arch compatibility layer
-    if [[ -z ${LIBIDIR} ]]; then
+    if [[ -z ${LIBDIR} ]]; then
         local node_modules=/usr/$(exhost --target)/lib/node_modules
     else
         local node_modules=/usr/${LIBDIR}/node_modules
@@ -218,7 +218,7 @@ npm_src_prepare() {
 
 npm_src_install() {
     # multi-arch compatibility layer
-    if [[ -z ${LIBIDIR} ]]; then
+    if [[ -z ${LIBDIR} ]]; then
         local host=$(exhost --target)
         local node_modules=/usr/${host}/lib/node_modules
         local bindir=/usr/${host}/bin
