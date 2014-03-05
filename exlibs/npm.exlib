@@ -1,0 +1,256 @@
+# Copyright 2013-2014 Jorge Aparicio
+# Distributed under the terms of the GNU General Public License v2
+
+# This exlib will give paludis the ability to install npm (node packaged
+# modules), while complying to the npm tool specification. First I'll describe
+# the specifications that paludis have to comply with.
+
+# npm enforces the following directory layout (. is /usr/lib/node_modules)
+#
+# .
+# |-- zebrapig
+# |   |-- package.json
+# |   |-- ${the_actual_zebrapig-1.0.0_package}
+# |   `-- node_modules
+# |       |-- zebra
+# |       |   |-- package.json
+# |       |   |-- ${the_actual_zebra-1.0.0_package}
+# |       |   `-- node_modules
+# |       |       `-- bra
+# |       |           |-- package.json
+# |       |           `-- ${the_actual_bra-1.0.0_package}
+# |       `-- pig
+# |           |-- package.json
+# |           |-- ${the_actual_pig-1.0.0_package}
+# |           `-- node_modules
+# |               `-- pi
+# |                   |-- package.json
+# |                   `-- ${the_actual_pi-1.0.0_package}
+# `-- brad-pig
+#     |-- package.json
+#     |-- ${the_actual_brad-pig_package}
+#     `-- node_modules
+#         |-- bra
+#         |   |-- package.json
+#         |   `-- ${the_actual_bra-0.0.5_package}
+#         `-- pig
+#             |-- package.json
+#             |-- ${the_actual_pig-1.0.0_package}
+#             `-- node_modules
+#                 `-- pi
+#                     |-- package.json
+#                     `-- ${the_actual_pi-1.0.0_package}
+#
+# Here npm recognizes two installed packages: zebrapig and brad-pig
+#
+# The tree is structured in such a way, that the dependencies are always in
+# the package's node_modules. e.g. zebrapig needs zebra and pig, and zebra
+# needs bra whereas pig needs pi.
+#
+# If another package needs a common dependency, npm won't care and will
+# download the dependency again and put it in its rightful place
+#
+# The package.json file holds the package metadata (version, dependencies),
+# and is necessary for npm to traverse the tree and determine whether the
+# layout is correct or not
+
+# The above workflow reminds me of static linking, so this exlib will use a
+# dynamic linking approach, while still being compatible with npm. This exlib
+# will use the following directory layout.
+# ( node_modules=/usr/${LIBDIR}/node_modules )
+#
+# ${node_modules}
+# |-- .bra-0.0.5
+# |   |-- package.json
+# |   `-- ${the_actual_bra-0.0.5_package}
+# |-- .bra-1.0.0
+# |   |-- package.json
+# |   `-- ${the_actual_bra-1.0.0_package}
+# |-- .brad-pig-1.0.0
+# |   |-- package.json
+# |   |-- ${the_actual_bra-1.0.0_package}
+# |   `-- node_modules
+# |       |-- bra --> ${node_modules}/.bra-0.0.5
+# |       `-- pig --> ${node_modules}/.pig-1.0.0
+# |-- .pi-1.0.0
+# |   |-- package.json
+# |   `-- ${the_actual_pi-1.0.0_package}
+# |-- .pig-1.0.0
+# |   |-- package.json
+# |   |-- ${the_actual_pig-1.0.0_package}
+# |   `-- node_modules
+# |       `-- pi --> ${node_modules}/.pi-1.0.0
+# |-- .zebra-1.0.0
+# |   |-- package.json
+# |   |-- ${the_actual_zebra-1.0.0_package}
+# |   `-- node_modules
+# |       `-- bra --> ${node_modules}/.bra-1.0.0
+# `-- .zebrapig-1.0.0
+#     |-- package.json
+#     |-- ${the_actual_zebrapig_package}
+#     `-- node_modules
+#         |-- bra --> ${node_modules}/.bra-0.0.5
+#         `-- pig --> ${node_modules}/.pig-1.0.0
+#
+# To provide the npm compatibility we add the following symlinks using
+# alternatives light
+#
+# ${node_modules}
+# |-- bra --> .bra-1.0.0
+# |-- brad-pig --> .brad-pig-1.0.0
+# |-- pi --> .pi-1.0.0
+# |-- pig --> .pig-1.0.0
+# |-- zebra --> .zebra-1.0.0
+# `-- zebrapig --> .zebrapig-1.0.0
+#
+# Notice that we installed two versions of the package pi, and we only keep
+# the symlink to the best version thanks to alternative-light. (npm behavior is
+# to keep the last package that was installed)
+#
+# AFAIC, using this structure has these advantages
+# 1.- We flatten out the tree, and now is easier to draw \o/
+# 2.- We don't reinstall common dependencies
+# 3.- This can be managed by paludis
+# 4.- By hiding ${PNV} directories with a '.' and only exposing ${PN}
+#     directories, we make npm happy as well
+#
+# Since we maintain npm compatibility, the user can use 'npm link' to link his
+# development project to global modules. (This action is simply, create a
+# node_modules directory and place symlinks to the desired modules in it)
+
+# exparams
+#  has_bin ( format: true or false ) ( defaults to false )
+#    whether the package will install scripts into /usr/bin
+#
+#  node_version ( format: [~>1.2.3] ) ( defaults to empty )
+#    node verspec accepted by the package
+
+# VARIABLES
+#   NPM_{RUN,TEST}_DEPS ( format; ( foo "bar [~>1.23]" ) )
+#     array of dependencies, specified as ${pn} or as "${pn} ${verspec}"
+#
+#   NPM_BINS ( format; ( "foo bin/cmd.js" ) )
+#     array of scripts to "install" in /usr/bin e.g. install bin/cmd.js as foo
+
+require alternatives
+
+export_exlib_phases src_prepare src_install
+
+myexparam -b has_bin=false
+
+if exparam -b has_bin && [[ ${#NPM_BINS[@]} -eq 0 ]]; then
+    die "relative paths to the scripts must be listed in a NPM_BINS array"
+fi
+
+myexparam node_version=
+exparam -v NPM_NODE_VERSION node_version
+
+HOMEPAGE="https://npmjs.org/package/${PN}"
+DOWNLOADS="http://registry.npmjs.org/${PN}/-/${PNV}.tgz"
+
+DEPENDENCIES="run: ( dev-lang/node${NPM_NODE_VERSION} "
+
+for dep in "${NPM_RUN_DEPS[@]}"; do
+    if [[ "${dep}" == *\ \[*\] ]]; then
+        DEPENDENCIES+="dev-node/${dep/ /:=} "
+    else
+        DEPENDENCIES+="dev-node/${dep}:= "
+    fi
+done
+
+DEPENDENCIES+=") test: ( dev-lang/node${NPM_NODE_VERSION} "
+for dep in "${NPM_TEST_DEPS[@]}"; do
+    if [[ "${dep}" == *\ \[*\] ]]; then
+        DEPENDENCIES+="dev-node/${dep/ /:=} "
+    else
+        DEPENDENCIES+="dev-node/${dep}:= "
+    fi
+done
+
+DEPENDENCIES+=")"
+
+WORK="${WORKBASE}/package"
+
+pnv_from_dep() {
+    [[ ${#} -eq 1 ]] || die "${FUNCNAME} needs exactly one argument"
+
+    local spec=dev-node/${1/ /}
+    local id=$(best_version "${spec}")
+    id=${id#dev-node/}
+    id=${id%::installed}
+    echo ${id%-r*}
+}
+
+npm_src_prepare() {
+    # multi-arch compatibility layer
+    if [[ -z ${LIBIDIR} ]]; then
+        local node_modules=/usr/$(exhost --target)/lib/node_modules
+    else
+        local node_modules=/usr/${LIBDIR}/node_modules
+    fi
+
+    local pnv=
+
+    # "link" against the run dependencies
+    if [[ ${#NPM_RUN_DEPS[@]} -gt 0 ]]; then
+        if ! [[ -d node_modules ]]; then
+            edo mkdir node_modules
+        fi
+
+        for dep in "${NPM_RUN_DEPS[@]}"; do
+            pnv=$(pnv_from_dep "${dep}")
+            edo ln -s ${node_modules}/.${pnv} node_modules/${pnv%-*}
+        done
+    fi
+
+    # "link" against the test dependencies
+    if expecting_tests && [[ ${#NPM_TEST_DEPS[@]} -gt 0 ]]; then
+        if ! [[ -d node_modules ]]; then
+            edo mkdir node_modules
+        fi
+
+        for dep in "${NPM_TEST_DEPS[@]}"; do
+            pnv=$(pnv_from_dep "${dep}")
+            edo ln -s ${node_modules}/.${pnv} node_modules/${pnv%-*}
+        done
+    fi
+}
+
+npm_src_install() {
+    # multi-arch compatibility layer
+    if [[ -z ${LIBIDIR} ]]; then
+        local host=$(exhost --target)
+        local node_modules=/usr/${host}/lib/node_modules
+        local bindir=/usr/${host}/bin
+    else
+        local node_modules=/usr/${LIBDIR}/node_modules
+        local bindir=/usr/bin
+    fi
+
+    local alts=( _node-${PN} ${SLOT} ${SLOT} )
+
+    # scripts
+    if exparam -b has_bin; then
+        local bname=
+        local bpath=
+        dodir ${bindir}
+        for bin in "${NPM_BINS[@]}"; do
+            bname=${bin% *}
+            bpath=${bin#* }
+            exeinto ${node_modules}/.${PNV}/$(dirname ${bpath})
+            doexe ${bpath}
+            dosym ${node_modules}/.${PNV}/${bpath} ${bindir}/${bname}-${PV}
+            edo rm ${bpath}
+            alts+=( ${bindir}/${bname} ${bname}-${PV} )
+        done
+    fi
+
+    # the rest
+    insinto ${node_modules}/.${PNV}
+    doins -r *
+
+    # create symlinks
+    alts+=( ${node_modules}/${PN} .${PNV} )
+    alternatives_for "${alts[@]}"
+}
+
