@@ -6,9 +6,9 @@ NPM_RUN_DEPS=(
     "abbrev [~>1.0]"
 )
 
-#NPM_TEST_DEPS=(
-    #"tap [~>0.4.8]"
-#)
+NPM_TEST_DEPS=(
+    "tap [~>0.4.8]"
+)
 
 #NPM_BINS=(
     #"nopt.js bin/nopt.js"
@@ -22,8 +22,6 @@ SUMMARY="Option parsing for Node, supporting types, shorthands, etc"
 LICENCES="MIT"
 SLOT="2.2.0"
 PLATFORMS="~amd64"
-
-RESTRICT="test"
 
 src_test() {
     edo tap test/*.js
