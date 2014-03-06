@@ -20,6 +20,6 @@ SLOT="0.2.14"
 PLATFORMS="~amd64"
 
 src_test() {
-    edo tap test/*.js
+    edo node_modules/tap/bin/tap.js test/*.js
 }
 
