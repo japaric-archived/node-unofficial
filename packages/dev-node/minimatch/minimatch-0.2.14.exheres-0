@@ -7,9 +7,9 @@ NPM_RUN_DEPS=(
     "sigmund [~>1.0.0]"
 )
 
-#NPM_TEST_DEPS=(
-    #tap
-#)
+NPM_TEST_DEPS=(
+    tap
+)
 
 require npm
 
@@ -18,8 +18,6 @@ SUMMARY="a glob matcher in javascript"
 LICENCES="MIT"
 SLOT="0.2.14"
 PLATFORMS="~amd64"
-
-RESTRICT="test"
 
 src_test() {
     edo tap test/*.js
