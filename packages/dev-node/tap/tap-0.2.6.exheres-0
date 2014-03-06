@@ -13,7 +13,7 @@ NPM_RUN_DEPS=(
 )
 
 NPM_BINS=(
-    "tap.js bin/tap.js"
+    "tap bin/tap.js"
 )
 
 require npm [ has_bin=true ]
