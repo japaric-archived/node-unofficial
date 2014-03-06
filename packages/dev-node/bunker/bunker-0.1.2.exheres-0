@@ -6,9 +6,9 @@ NPM_RUN_DEPS=(
     "burrito [>=0.2.5&<0.3]"
 )
 
-#NPM_TEST_DEPS=(
-    #"tap [~>0.2.4]"
-#)
+NPM_TEST_DEPS=(
+    "tap [~>0.2.4]"
+)
 
 require npm
 
@@ -18,9 +18,14 @@ LICENCES="MIT"
 SLOT="0.1.2"
 PLATFORMS="~amd64"
 
-RESTRICT="test"
+src_prepare() {
+    # remove failing tests
+    edo rm test/cover.js
+
+    npm_src_prepare
+}
 
 src_test() {
-    edo tap test/*.js
+    edo node_modules/tap/bin/tap.js test/*.js
 }
 
