@@ -7,9 +7,9 @@ NPM_RUN_DEPS=(
     "uglify-js [~>1.1.1]"
 )
 
-#NPM_TEST_DEPS=(
-    #"tap [~>0.2.5]"
-#)
+NPM_TEST_DEPS=(
+    "tap [~>0.2.5]"
+)
 
 require npm [ node_version="[>=0.4.0]" ]
 
@@ -19,9 +19,7 @@ LICENCES="as-is"
 SLOT="0.2.12"
 PLATFORMS="~amd64"
 
-RESTRICT="test"
-
 src_test() {
-    edo tap test/*.js
+    edo node_modules/tap/bin/tap.js test/*.js
 }
 
