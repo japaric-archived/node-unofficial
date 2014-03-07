@@ -126,11 +126,18 @@
 #    node verspec accepted by the package
 
 # VARIABLES
-#   NPM_{RUN,TEST}_DEPS ( format; ( foo "bar [~>1.23]" ) )
+#   NPM_{RUN,TEST}_DEPS ( format: ( foo "bar [~>1.23]" ) )
 #     array of dependencies, specified as ${pn} or as "${pn} ${verspec}"
 #
-#   NPM_BINS ( format; ( "foo bin/cmd.js" ) )
+#   NPM_BINS ( format: ( "foo bin/cmd.js" ) )
 #     array of scripts to "install" in /usr/bin e.g. install bin/cmd.js as foo
+#
+#   NPM_UNBUNDLE ( format: ( foo bar ) )
+#     some packages come with bundled dependencies already installed under the
+#     node_modules directory, the packages listed under this variable will be
+#     removed from those bundled dependencies, so we can "link" our system
+#     packages to cover the dependencies.
+#     This is equivalent to hard-enabling a system-{foo,bar} option
 
 require alternatives
 
@@ -187,6 +194,11 @@ pnv_from_dep() {
 }
 
 npm_src_prepare() {
+    # unbundle packaged dependencies
+    for dep in "${NPM_UNBUNDLE[@]}"; do
+        edo rm -rf node_modules/${dep}
+    done
+
     # multi-arch compatibility layer
     if [[ -z ${LIBDIR} ]]; then
         local node_modules=/usr/$(exhost --target)/lib/node_modules
