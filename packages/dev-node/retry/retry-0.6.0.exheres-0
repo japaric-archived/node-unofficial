@@ -16,6 +16,8 @@ LICENCES="MIT"
 SLOT="0.6.0"
 PLATFORMS="~amd64"
 
+RESTRICT="test"
+
 src_compile() {
     # tries to run the tests
     :
