@@ -178,7 +178,12 @@ pnv_from_dep() {
     local id=$(best_version "${spec}")
     id=${id#dev-node/}
     id=${id%::installed}
-    echo ${id%-r*}
+
+    if [[ ${id} =~ -r[0-9]+$ ]];then
+        echo ${id%-r*}
+    else
+        echo ${id}
+    fi
 }
 
 npm_src_prepare() {
